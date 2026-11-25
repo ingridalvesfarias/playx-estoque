@@ -1,0 +1,84 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function autenticado() {
+      return request.auth != null;
+    }
+
+    function produtoValido(dados) {
+      return dados.keys().hasAll([
+          'nome',
+          'precoVenda',
+          'quantidadeEstoque',
+          'ativo',
+          'criadoEm'
+        ])
+        && dados.keys().hasOnly([
+          'nome',
+          'precoVenda',
+          'quantidadeEstoque',
+          'ativo',
+          'criadoEm'
+        ])
+        && dados.nome is string
+        && dados.nome.size() > 0
+        && dados.nome.size() <= 120
+        && dados.precoVenda is int
+        && dados.precoVenda > 0
+        && dados.quantidadeEstoque is int
+        && dados.quantidadeEstoque >= 0
+        && dados.ativo is bool;
+    }
+
+    match /produtos/{produtoId} {
+      allow read: if autenticado();
+
+      allow create: if autenticado()
+        && produtoValido(request.resource.data)
+        && request.resource.data.criadoEm == request.time;
+
+      allow update: if autenticado()
+        && produtoValido(request.resource.data)
+        && request.resource.data.criadoEm == resource.data.criadoEm;
+
+      allow delete: if false;
+    }
+
+    match /vendas/{vendaId} {
+      allow read: if autenticado();
+
+      allow create: if autenticado()
+        && request.resource.data.keys().hasAll([
+          'itens',
+          'valorTotal',
+          'formaPagamento',
+          'criadoEm'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'itens',
+          'valorTotal',
+          'formaPagamento',
+          'criadoEm'
+        ])
+        && request.resource.data.itens is list
+        && request.resource.data.itens.size() > 0
+        && request.resource.data.valorTotal is int
+        && request.resource.data.valorTotal > 0
+        && request.resource.data.formaPagamento in [
+          'Pix',
+          'Dinheiro',
+          'Cartão de débito',
+          'Cartão de crédito',
+          'Boleto'
+        ]
+        && request.resource.data.criadoEm == request.time;
+
+      allow update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
